@@ -1,9 +1,22 @@
 # PMLAMP
-## P(Piccadaci) M(Mastronardo) L(Linux) A(A web server) M(Mysql/Mongodb) P(Perl)
+## P(Piccadaci) M(Mastronardo) L(Linux) A(A web server) M(Mysql/Mongodb) P(PHP)
 Progetto sviluppato su Debian GNU/Linux 11 (architettura x86) per la gestione di utenti, dove i soli servizi messi a loro disposizione sono:
 - un web server (Nginx) per la creazione di pagine web tramite Eclipse PHP IDE;
 - database sql e nosql;
 - connessione ai database tramite php;
+
+---
+
+# Moduli di Perl
+Prima di cominciare bisogna installare tutti i moduli di perl necessari per l'esecuzione degli script.
+```bash
+perl -MCPAN -e shell # apertura della shell di CPAN
+install Expect
+install DBI
+install MongoDB
+```
+
+---
 
 # Gestione dell'utenza
 L'amministratore può creare nuovi utenti e aggiungerli automaticamente al gruppo _Studenti_ tramite lo script ```adduser.pl```.
@@ -56,6 +69,7 @@ sudo chmod 770 .backup
 ```
 con cron
 
+---
 
 # Firewall
 Un firewall è un dispositivo, software o hardware, per la sicurezza della rete che permette la gestione del traffico in entrata e in uscita utilizzando una serie predefinita di regole di sicurezza per consentire o bloccare gli eventi.
@@ -97,6 +111,8 @@ sudo ufw status
 ```
 IMMAGINE STATO FIREWALL
 
+---
+
 # Database
 Per restare al passo coi tempi abbiamo scelto di utilizzare sia un database sql e che nosql.
 ## MySql
@@ -108,6 +124,8 @@ MySql è un RDBMS open source ed è tra i più diffusi grazie alle seguenti cara
 Sempre tramite l'esecuzione dello script ```adduser.pl``` l'amministratore crea le utenze anche in MySql.
 
 ```perl
+use DBI;
+
 $usernamedb=lc(substr($nome, 0, 1)) . lc($cognome);
 $myConnection = DBI->connect("DBI:mysql:mysql:localhost", "root", "adminadmin");
 $query = $myConnection->prepare("SET GLOBAL validate_password.policy=LOW");
@@ -154,6 +172,9 @@ system ('sudo systemctl restart mongod');
 
 Creazione dell'utente, del database e di una collection per mantenere persistente il database, e assegnazione dei privilegi.
 ```perl
+use MongoDB ();
+$usernamedb=lc(substr($nome, 0, 1)) . lc($cognome);
+
 $client = MongoDB->connect();
 my $db = $client->get_database($username);
 $db->run_command(
@@ -187,6 +208,8 @@ system ('sudo systemctl restart mongod');
 ```
 
 IMMAGINE DEI DB
+
+---
 
 # Web server: Nginx
 Nginx è software open source all-in-one che include vari servizi:
@@ -241,6 +264,11 @@ system ('sudo cp /home/administrator/info.php /var/www/' . $username);
 system ('sudo systemctl reload nginx');
 ```
 
+Puoi testare se la configurazione ha errori di sintassi digitando:
+```bash
+sudo nginx -t
+```
+
 IMMAGINE DI UNA WORKSPACE
 
 Creo un file nella home dell'utente con le sue credenziali e il numero di porta assegnato.
@@ -250,7 +278,6 @@ system ('sudo chown ' . $username . ':' . $username . ' /home/' . $username  . '
 system ('sudo chmod 117 /home/' . $username . '/credentials.txt');
 ```
 IMMAGINE DEL FILE
-
 
 ## Accesso ai database tramite PHP
 Installazioni necessarie per accedere ai database tramite PHP:
