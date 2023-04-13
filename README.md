@@ -10,7 +10,7 @@ Progetto sviluppato su Debian GNU/Linux 11 (architettura x86) per la gestione di
 # Moduli di Perl
 Prima di cominciare bisogna installare tutti i moduli di perl necessari per l'esecuzione degli script.
 ```bash
-perl -MCPAN -e shell # apertura della shell di CPAN
+perl -MCPAN -e shell # apertura della shell di CPAN (Comprehensive Perl Archive Network)
 install Expect
 install DBI
 install MongoDB
@@ -147,7 +147,7 @@ $result = $query->execute();
 IMMAGINE DEI DB
 
 ## MongoDb
-Il più popolare tra i database nosql document-oriented, MongoDb utilizza una struttura dati di tipo BSON (Binary JSON), che lo rende molto flessibile. Le caratteristiche principali dell'applicazione sono la facilità delle Query, l'indicizzazione e la possibilità di effettuare sharding e replica, in maniera tale da lasciare all'amministratore la decisione riguardo il trade-off fra velocità e affidabilità dei dati.
+Il più popolare tra i database NoSql e document-oriented è MongoDb, che utilizza una struttura dati di tipo BSON (Binary JSON), che lo rende molto flessibile. Le caratteristiche principali dell'applicazione sono la facilità delle Query, l'indicizzazione e la possibilità di effettuare sharding e replica, in maniera tale da lasciare all'amministratore la decisione riguardo il trade-off fra velocità e affidabilità dei dati.
 
 Sempre tramite l'esecuzione dello script ```adduser.pl``` l'amministratore crea le utenze anche in MongoDb.
 In questo caso, però, prima bisogna disabilitare temporaneamente l'autenticazione agendo sul file di configurazione.
@@ -227,7 +227,7 @@ Con Nginx, un processo master può controllare più processi worker. Il master m
 NGINX è anche spesso posizionato tra i client e un secondo server web, per fungere da terminatore SSL/TLS o acceleratore web. Agendo da intermediario, NGINX gestisce in modo efficiente le attività che potrebbero rallentare il tuo server Web, come la negoziazione di SSL/TLS o la compressione e la memorizzazione nella cache dei contenuti per migliorare le prestazioni.
 
 ## Workspace
-Dopo aver settato correttamente la workspace dell'amministratore, si procede a creare la workspace dell'utente. Per farlo si deve:
+Dopo aver settato correttamente la workspace dell'amministratore, si procede a creare la workspace dell'utente, per la quale occorre:
 - copiare la cartella dell'amministratore nella home dell'utente;
 - creare una nuova cartella ```/var/www/<USERNAME>```;
 - l'utente diventa il proprietario della cartella ```/var/www/<USERNAME>```;
