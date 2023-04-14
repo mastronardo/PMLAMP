@@ -18,7 +18,7 @@ install MongoDB
 
 ---
 
-# Gestione dell'utenza
+# Creazione dell'utenza
 L'amministratore può creare nuovi utenti e aggiungerli automaticamente al gruppo _Studenti_ tramite lo script ```adduser.pl```.
 
 ```perl
@@ -51,23 +51,49 @@ system ("sudo chown " . $username  . ":administrator /home/Lavori/" . $username)
 system ("sudo chmod 770 /home/Lavori/" . $username);
 system ("sudo chmod 757 /home/" . $username);
 ```
-_Lavori_ è la cartella condivisa tra gli utenti del gruppo _Studenti_ e l'amministratore.
+
+_Lavori_ è la cartella condivisa tra gli utenti del gruppo _Studenti_ e l'**amministratore**.
 I permessi di lettura, scrittura ed esecuzione sui file all'interno di questa cartella sono concessi esclusivamente all'utente proprietario; invece qualsiasi altro utente ha solo i permessi di lettura.
+
+IMMAGINE DEI PERMESSI
 
 Le suddette utenze non potranno eseguire nessun comando ```sudo``` da terminale perché non fanno parte del ```sudoers group```.
 
 Ogni utente ha la propria home in quanto è stato usato il comando ```adduser```.
 
-IMMAGINE DEI PERMESSI E DEI GRUPPI
+L'amministratore può visualizzare la lista dei gruppi e degli utenti presenti nel sistema tramite lo script ```show_user_group.pl```:
+```perl
+system("cut -d ':' -f 1,3 /etc/group | sort -n > groups.txt");
+system("cut -d ':' -f 3,5 /etc/passwd | sort -n > userstemp.txt");
+system("sed 's/,,,//' userstemp.txt > users.txt");
+system("rm userstemp.txt");
+```
+IMMAGINE DEI FILE
 
-## Backup della cartella condivisa
-backup all'interno della tabella condivisa
+# Backup della cartella condivisa
+Per questioni di sicurezza e/o di integrità del dato, viene effettuato backup delle cartelle degli studenti, collocate nella cartalla condivisa _Lavori_.
+Il backup è una cartella nascosta visibile solo all'amministratore e viene create all'interno della cartella _Lavori_.
+
 ```bash
+cd /home/Lavori
 mkdir .backup
 sudo chown administrator:administrator .backup
 sudo chmod 770 .backup
 ```
-con cron
+
+L'amministratore può eseguire il backup in qualiasi momento eseguendo lo script ```Studentsbackup.pl```:
+```perl
+$studentString = `sudo getent group | cut -f 3,4 -d : | grep 1002 | cut -f 2 -d :`;
+my @students = split (',', $studentString);
+foreach my $st (@students){
+chomp($st);
+$filename= "backup-". $st . "-'" . localtime() . "'.tar.gz"; 
+system("sudo tar -cvzf /home/Lavori/.backup/" . $filename . " /home/Lavori/" . $st);
+}
+```
+
+## Cron
+Per eseguire il backup seguendo una routine utilizziamo il demone di pianificazione dei lavori basato sul tempo, <b>Cron</b>.
 
 ---
 
@@ -134,7 +160,7 @@ $query = $myConnection->prepare("CREATE DATABASE " . $username);
 $result = $query->execute();
 $query = $myConnection->prepare("CREATE USER '" . $usernamedb ."'\@\'localhost\' IDENTIFIED BY '" . $username ."'");
 $result = $query->execute();
-$query = $myConnection->prepare("REVOKE USAGE ON . FROM '" . $usernamedb . "\'\@\'localhost'");
+$query = $myConnection->prepare("REVOKE USAGE ON *.* FROM '" . $usernamedb . "\'\@\'localhost'");
 $result = $query->execute();
 $query = $myConnection->prepare("GRANT ALL PRIVILEGES ON " . $username . ".* TO '" . $usernamedb . "\'\@\'localhost'");
 $result = $query->execute();
@@ -229,18 +255,28 @@ NGINX è anche spesso posizionato tra i client e un secondo server web, per fung
 ## Workspace
 Dopo aver settato correttamente la workspace dell'amministratore, si procede a creare la workspace dell'utente, per la quale occorre:
 - copiare la cartella dell'amministratore nella home dell'utente;
-- creare una nuova cartella ```/var/www/<USERNAME>```;
-- l'utente diventa il proprietario della cartella ```/var/www/<USERNAME>```;
-- per ogni utente si crea un dominio sul server Nginx.
+- l'utente diventa il proprietario della cartella ```/home/<USERNAME>/eclipse-workspace```;
+- creare una nuova cartella ```/var/www/<USERNAME>``` e rendere l'utente il nuovo proprietario;
+- creare un link simbolico tra ```/var/www/<USERNAME>``` e ```/home/<USERNAME>/eclipse-workspace/www```;
+- copiare il contenuto della cartella ```/home/administrator/eclipse-workspace/PMLAMP/*``` nella cartella ```/var/www/<USERNAME>``` e rendere l'utente il nuovo proprietario;
+- creare un link simbolico tra ```/home/Lavori/<USERNAME>``` e ```/home/<USERNAME>/eclipse-workspace/Lavori```;
+- a ogni utente assegnamo un numero di porta diverso, che andremo ad incrementare ad ogni nuova creazione di utente;
+- creare e modificare adeguatamente un file di configurazione per il nuovo utente, che andremo a salvare nella cartella ```/etc/nginx/sites-available/```;
+- creare un link simbolico tra ```/etc/nginx/sites-available/<USERNAME>``` e ```/etc/nginx/sites-enabled/<USERNAME>```;
 
 ```perl
 system('sudo cp -r /home/administrator/eclipse-workspace/ /home/' . $username);
-system('sudo mkdir /var/www/' . $username);
-system('sudo chown -R ' . $username . ':' . $username . ' /var/www/' . $username);
+system ('sudo chown -R ' . $username . ':' . $username . ' /home/' . $username . '/eclipse-workspace');
+system ('sudo mkdir /var/www/' . $username);
+system ('sudo chown -R ' . $username . ':' . $username . ' /var/www/' . $username);
+system ('sudo ln -s /var/www/' . $username . ' /home/' . $username . '/eclipse-workspace/www');
+system ('sudo cp -R /home/administrator/eclipse-workspace/PMLAMP/* /var/www/' . $username);
+system ('sudo chown -R ' . $username . ':' . $username . ' /var/www/' . $username);
+system ('sudo ln -s /home/Lavori/' . $username . ' /home/' . $username . '/eclipse-workspace/Lavori');
 
 $port= `tail -n 1 /home/administrator/.ports` + 1;
 system ('echo "' . $port .'" >> /home/administrator/.ports');
-system ('echo "' . $cognome . ' ' . $nome . ': ' . $port . '" >> /home/administrator/Ports-students');
+system ('echo "' . $username . ' ' . $port . '" >> /home/administrator/Ports-students');
 
 open my $in, '<', '/etc/nginx/sites-available/example';
 open my $out, '>', '/etc/nginx/sites-available/' . $username;
@@ -260,7 +296,6 @@ print $out $_;
 system ('sudo sed -i "5d" ' . '/etc/nginx/sites-available/' . $username); 
 system ('sudo sed -i "5d" ' . '/etc/nginx/sites-available/' . $username); 
 system ('sudo ln -s /etc/nginx/sites-available/' . $username . ' /etc/nginx/sites-enabled/' . $username);
-system ('sudo cp /home/administrator/info.php /var/www/' . $username);
 system ('sudo systemctl reload nginx');
 ```
 
@@ -273,11 +308,16 @@ IMMAGINE DI UNA WORKSPACE
 
 Creo un file nella home dell'utente con le sue credenziali e il numero di porta assegnato.
 ```perl
-system ('sudo echo "Credenziali MySQL e MongoDb\nUsername:' . $usernamedb . '\nPassword: ' . $username . '\nNumero di porta: ' . $port . '" > /home/' . $username . '/credentials.txt');
+system ('sudo echo "Credenziali MySQL e MongoDb\Username:' . $usernamedb . '\Password: ' . $username . '\Numero di porta: ' . $port . '" > /home/' . $username . '/credentials.txt');
 system ('sudo chown ' . $username . ':' . $username . ' /home/' . $username  . '/credentials.txt');
-system ('sudo chmod 117 /home/' . $username . '/credentials.txt');
+system ('sudo chmod 407 /home/' . $username . '/credentials.txt');
 ```
 IMMAGINE DEL FILE
+
+Per semplificare la user experience aggiunto al file ```bashrc``` l'alias eclipse, in modo da poter avviare l'IDE semplicemente digitando "eclipse" da terminale:
+```perl
+system ('sudo echo "alias eclipse=\'/home/Lavori/eclipse/eclipse\'" >> /home/' . $username . '/.bashrc');
+```
 
 ## Accesso ai database tramite PHP
 Installazioni necessarie per accedere ai database tramite PHP:
@@ -289,7 +329,7 @@ sudo apt install curl
 ```
 
 ### MySql
-All'interno del file ```info.php``` la parte di codice che permette di connettersi al database MySql è:
+All'interno del file ```index.php``` la parte di codice che permette di connettersi al database MySql è:
 ```php
 $servername = "localhost";
 $username = "<YOUR_URSERNAME>";
@@ -322,10 +362,10 @@ composer require mongodb/mongodb # installazione della libreria PHP MongoDB
 
 
 Dopo aver installato tutto il necessario possiamo procedere con l'accesso al database MongoDb.
-All'interno del file ```info.php``` la parte di codice che permette di connettersi al database MongoDb è:
+All'interno del file ```index.php``` la parte di codice che permette di connettersi al database MongoDb è:
 ```php
 $servername = "localhost";
-$username = "<YOUR_URSERNAME>";
+$username = "<YOUR_USERNAME>";
 $password = "<YOUR_PASSWORD>";
 
 $m = new MongoDB\Client('mongodb://' . $username . ':' . $password . '@localhost:27017/<YOUR_DB_NAME>');
@@ -339,3 +379,98 @@ foreach ($result as $document) {
 
 echo "Connesso a MongoDb!\n";
 ```
+
+# Cancellazione dell'utenza
+L'amministratore può cancellare un utente tramite lo script ```deluser.pl```.
+
+- Cancellazione dell'utenza e della rispettiva home:
+```perl
+print ("Inserisci il nome dello studente che vuoi cancellare: ");
+$nome=<>;
+chomp($nome);
+print ("Inserisci il cognome dello studente che vuoi cancellare: ");
+$cognome=<>;
+chomp($cognome);
+$username=lc($nome) . lc($cognome);
+system("sudo deluser --remove-home " . $username);
+```
+
+- Cancellazione del resto delle cartelle e dei file:
+```perl
+system ("sudo rm -rf /home/Lavori/" . $username);
+system ("sudo rm -rf /var/www/" . $username);
+system ("sudo rm /etc/nginx/sites-enabled/" . $username);
+system ("sudo rm /etc/nginx/sites-available/" . $username);
+```
+
+- Cancellazione del numero di porta assegnato all'utente:
+```perl
+$string="cat Ports-students | grep $username";
+$line=`$string`;
+@arr=split(" ", $line);
+$port=@arr[1];
+system("sed -i -n '/" . $username . "'/!p Ports-students");
+system("sed -i -n '/" . $port . "'/!p .ports");
+system ("sort .ports");
+```
+
+- Cancellazione dell'utente e del personale database da MySQL:
+```perl
+use DBI;
+$usernamedb=lc(substr($nome, 0, 1)) . lc($cognome);
+
+$myConnection = DBI->connect("DBI:mysql:mysql:localhost", "root", "adminadmin");
+$query = $myConnection->prepare("DROP DATABASE " . $username);
+$result = $query->execute();
+$query = $myConnection->prepare("DROP USER '" . $usernamedb . "\'\@\'localhost'");
+$result = $query->execute();
+```
+
+- Cancellazione dell'utente e del personale database da MongoDB:
+    1) Disabilitazione temporanea dell'autenticazione agendo sul file di configurazione
+    ```perl
+    open my $in, '<', '/etc/mongod.conf';
+    open my $out, '>', '/etc/mongodtemp.conf';
+    while ( <$in> ){
+    print $out $_;
+    last if $. == 28;
+    }
+
+    my $line = <$in>;
+    $line= '      authorization: "disabled"' . "\n";
+    print $out $line;
+    while ( <$in> ){
+    print $out $_;}
+
+    system ('sudo mv /etc/mongodtemp.conf /etc/mongod.conf');
+    system ('sudo systemctl restart mongod');
+    ```
+
+    2) Cancellassione dell'utente e del database
+    ```perl
+    use MongoDB ();
+    $usernamedb=lc(substr($nome, 0, 1)) . lc($cognome);
+    my $client = MongoDB::MongoClient->new(host => 'localhost', port => 27017);
+    my $db = $client->get_database($username);
+    my $result = $db->run_command({'dropUser' => $usernamedb});
+    my $resultdb = $db->run_command({'dropDatabase' => 1});
+    ```
+
+    3) Riabilitazione dell'autenticazione
+    ```perl
+    open my $in, '<', '/etc/mongod.conf';
+    open my $out, '>', '/etc/mongodtemp.conf';
+    while ( <$in> ){
+    print $out $_;
+    last if $. == 28;
+    }
+
+    my $line = <$in>;
+    $line= '      authorization: "enabled"' . "\n";
+    print $out $line;
+    while ( <$in> ){
+    print $out $_;}
+
+    system ('sudo mv /etc/mongodtemp.conf /etc/mongod.conf');
+    system ('sudo systemctl restart mongod');
+    ```
