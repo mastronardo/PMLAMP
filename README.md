@@ -19,7 +19,7 @@ install MongoDB
 ---
 
 # Creazione dell'utenza
-L'amministratore può creare nuovi utenti e aggiungerli automaticamente al gruppo _Studenti_ tramite lo script ```adduser.pl```.
+L'amministratore può creare nuovi utenti e aggiungerli automaticamente al gruppo _Studenti_ tramite lo script ```addStudent.pl```.
 
 ```perl
 use Expect;
@@ -49,17 +49,21 @@ Le utenze appartenenti al gruppo _Studenti_ hanno i seguenti privilegi:
 system ("sudo mkdir -p /home/Lavori/" . $username);
 system ("sudo chown " . $username  . ":administrator /home/Lavori/" . $username);
 system ("sudo chmod 770 /home/Lavori/" . $username);
-system ("sudo chmod 757 /home/" . $username);
+system ("sudo chown " . $username  . ":administrator /home/" . $username);
+system ("sudo chmod 770 /home/" . $username);
 ```
 
 _Lavori_ è la cartella condivisa tra gli utenti del gruppo _Studenti_ e l'**amministratore**.
-I permessi di lettura, scrittura ed esecuzione sui file all'interno di questa cartella sono concessi esclusivamente all'utente proprietario; invece qualsiasi altro utente ha solo i permessi di lettura.
+I permessi di lettura, scrittura ed esecuzione sui file all'interno di questa cartella sono concessi esclusivamente all'utente proprietario e all'amministratore.
 
-IMMAGINE DEI PERMESSI
+Ogni utente ha la propria home in quanto è stato usato il comando ```adduser```, e solo l'utente proprietario e l'amministratore possono accedere ai file al suo interno.
 
 Le suddette utenze non potranno eseguire nessun comando ```sudo``` da terminale perché non fanno parte del ```sudoers group```.
 
-Ogni utente ha la propria home in quanto è stato usato il comando ```adduser```.
+Per controllare l'uid, il gid e i gruppi a cui appartiene un utente si può usare il comando ```id```:
+```bash
+uid=1000(matteopiccadaci) gid=1000(matteopiccadaci) groups=1000(matteopiccadaci),1002(Studenti)
+```
 
 L'amministratore può visualizzare la lista dei gruppi e degli utenti presenti nel sistema tramite lo script ```show_user_group.pl```:
 ```perl
@@ -68,10 +72,9 @@ system("cut -d ':' -f 3,5 /etc/passwd | sort -n > userstemp.txt");
 system("sed 's/,,,//' userstemp.txt > users.txt");
 system("rm userstemp.txt");
 ```
-IMMAGINE DEI FILE
 
 # Backup della cartella condivisa
-Per questioni di sicurezza e/o di integrità del dato, viene effettuato backup delle cartelle degli studenti, collocate nella cartalla condivisa _Lavori_.
+Per questioni di sicurezza e/o di integrità del dato, viene effettuato backup delle cartelle degli studenti, collocate nella cartella condivisa _Lavori_.
 Il backup è una cartella nascosta visibile solo all'amministratore e viene create all'interno della cartella _Lavori_.
 
 ```bash
@@ -91,9 +94,61 @@ $filename= "backup-". $st . "-'" . localtime() . "'.tar.gz";
 system("sudo tar -cvzf /home/Lavori/.backup/" . $filename . " /home/Lavori/" . $st);
 }
 ```
+Il backup viene effettuato in formato ```.tar.gz``` e viene salvato nella cartella ```.backup``` con il nome ```backup-<nomeutente>-<data>.tar.gz```.
 
 ## Cron
-Per eseguire il backup seguendo una routine utilizziamo il demone di pianificazione dei lavori basato sul tempo, <b>Cron</b>.
+Per eseguire il backup seguendo una routine periodica è necessario utilizzare il servizio basato sul tempo chiamato **Cron**, implementato attraverso l’uso del demone ```crond```. Il demone ha il compito di svegliarsi ogni minuto ed eseguire ogni programma che è stato programmato per quel momento.
+Il file di configurazione principale di crond è ```/etc/crontab``` che contiene l’elenco delle operazioni periodiche generali da eseguire nel sistema. Il primo file controllato da crond per decidere se c’e da eseguire una operazione è questo.
+Le operazioni periodiche sono denominate ```cronjob``` e vengono registrate e gestite tramite:
+- file presenti nella directory ```/etc/cron.d/```;
+- aggiungendo al file ```/etc/crontab``` una nuova espressione cron.
+
+Il servizio cron è in grado di eseguire anche operazioni richieste da un singolo utente; in questo caso questi dovrà creare un suo crontab personale invocando il comando:
+```bash
+sudo crontab -e
+```
+Il formato di questo file è identico a quello di ```/etc/crontab```, dove l'unica differenza è che non è necessario specificare l'utente dato che è già ben definito.
+Si può mostrare a schermo la lista delle operazioni programmate usando il comando:
+```bash
+crontab -l
+```
+
+La sintassi per le espressioni cron si può suddividere in due elementi: **la pianificazione** e **il comando da eseguire**.
+
+- La componente di pianificazione della sintassi è suddivisa in 5 diversi campi, che vengono scritti nel seguente ordine:
+
+|     Field        | Allowed Values  |
+|:----------------:|:---------------:|
+| Minute           | 0-59            |
+| Hour             | 0-23            |
+| Day of the month | 1-31            |
+| Month            | 1-12 or JAN-DEC |
+| Day of the week  | 0-6 or SUN-SAT  |
+
+Nelle espressioni cron, un asterisco è una variabile che rappresenta tutti i valori possibili. Pertanto, un'attività pianificata con * * * * * oppure */1 * * * * ... verrà eseguita ogni minuto di ogni ora di ogni giorno di ogni mese.
+
+- Il cronjob pianificato per questo progetto è il seguente:
+```bash
+0 8 5 3,6,9,12 * /usr/bin/perl /home/administrator/Studentsbackup.pl >/dev/null 2>&1
+```
+Il backup viene effettuato alle ore 08:00 del quinto giorno dei mesi di Marzo, Giugno, Settembre e Dicembre, e ciò permette di non saturare la memoria del server.
+
+Ricordati che per eseguire lo script con cron è necessario dare i permessi di esecuzione:
+```bash
+sudo chmod 770 /home/administrator/Studentsbackup.pl
+```
+
+### Blocco del Cron agli utenti
+L’amministratore può bloccare l’uso del servizio cron agli studenti con la creazione del file ```/etc/cron.deny``` che dovrà contenere la lista degli username di coloro che non possono usarlo. L'username viene scritto sul file tramite lo script ```addStudent.pl```.
+
+```bash
+cd /etc/
+sudo touch cron.deny
+```
+
+```perl
+system ('sudo echo "' . $username'" >> /etc/cron.deny');
+```
 
 ---
 
@@ -135,7 +190,10 @@ Per visualizzare lo stato del firewall si lancia il comando:
 ```bash
 sudo ufw status
 ```
-IMMAGINE STATO FIREWALL
+
+<p align="center">
+  <img src="docs/firewall.jpg">
+</p>
 
 ---
 
@@ -147,7 +205,7 @@ MySql è un RDBMS open source ed è tra i più diffusi grazie alle seguenti cara
 - integrazione di tutte le funzionalità che offrono i migliori DBMS: indici, trigger e stored procedure;
 - altissima capacità di integrazione con i principali linguaggi di programmazione, ambienti di sviluppo e suite di programmi da ufficio.
 
-Sempre tramite l'esecuzione dello script ```adduser.pl``` l'amministratore crea le utenze anche in MySql.
+Sempre tramite l'esecuzione dello script ```addStudent.pl``` l'amministratore crea le utenze anche in MySql.
 
 ```perl
 use DBI;
@@ -170,12 +228,34 @@ $query = $myConnection->prepare("FLUSH PRIVILEGES");
 $result = $query->execute();
 ```
 
-IMMAGINE DEI DB
+Per controllare che l'utenza sia stata creata correttamente controlliamo i database e i privilegi:
+```bash
+mysql> SHOW DATABASES;
++---------------------+
+| Database            |
++---------------------+
+| andrearicciardi     |
+| antoninomastronardo |
+| information_schema  |
+| matteopiccadaci     |
+| mysql               |
+| performance_schema  |
+| sys                 |
++---------------------+
+
+mysql> SHOW GRANTS FOR 'mpiccadaci'@'localhost';
++----------------------------------------------+
+| Grants for mpiccadaci@localhost |
++----------------------------------------------+
+| GRANT USAGE ON *.* TO mpiccadaci@localhost |
+| GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, REFERENCES, INDEX, ALTER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, EVENT, TRIGGER ON matteopiccadaci.* TO mpiccadaci@localhost |
++----------------------------------------------+
+```
 
 ## MongoDb
 Il più popolare tra i database NoSql e document-oriented è MongoDb, che utilizza una struttura dati di tipo BSON (Binary JSON), che lo rende molto flessibile. Le caratteristiche principali dell'applicazione sono la facilità delle Query, l'indicizzazione e la possibilità di effettuare sharding e replica, in maniera tale da lasciare all'amministratore la decisione riguardo il trade-off fra velocità e affidabilità dei dati.
 
-Sempre tramite l'esecuzione dello script ```adduser.pl``` l'amministratore crea le utenze anche in MongoDb.
+Sempre tramite l'esecuzione dello script ```addStudent.pl``` l'amministratore crea le utenze anche in MongoDb.
 In questo caso, però, prima bisogna disabilitare temporaneamente l'autenticazione agendo sul file di configurazione.
 
 ```perl
@@ -233,7 +313,11 @@ system ('sudo mv /etc/mongodtemp.conf /etc/mongod.conf');
 system ('sudo systemctl restart mongod');
 ```
 
-IMMAGINE DEI DB
+<p align="center">
+  <img src="docs/mongo-dbs.jpg">
+  <br>
+  <img src="docs/mongo-user.jpg">
+</p>
 
 ---
 
@@ -304,15 +388,23 @@ Puoi testare se la configurazione ha errori di sintassi digitando:
 sudo nginx -t
 ```
 
-IMMAGINE DI UNA WORKSPACE
+<p align="center">
+  <img src="docs/workspace.png">
+</p>
 
 Creo un file nella home dell'utente con le sue credenziali e il numero di porta assegnato.
 ```perl
 system ('sudo echo "Credenziali MySQL e MongoDb\Username:' . $usernamedb . '\Password: ' . $username . '\Numero di porta: ' . $port . '" > /home/' . $username . '/credentials.txt');
-system ('sudo chown ' . $username . ':' . $username . ' /home/' . $username  . '/credentials.txt');
-system ('sudo chmod 407 /home/' . $username . '/credentials.txt');
+system ('sudo chown ' . $username . ':administrator /home/' . $username  . '/credentials.txt');
+system ('sudo chmod 470 /home/' . $username . '/credentials.txt');
 ```
-IMMAGINE DEL FILE
+
+L'amministratore può controllare i numeri di porta associati agli studenti col comando ```cat /home/administrator/Ports-students```:
+```bash
+matteopiccadaci 3001
+andrearicciardi 3002
+antoninomastronardo 3003
+```
 
 Per semplificare la user experience aggiunto al file ```bashrc``` l'alias eclipse, in modo da poter avviare l'IDE semplicemente digitando "eclipse" da terminale:
 ```perl
@@ -368,7 +460,7 @@ $servername = "localhost";
 $username = "<YOUR_USERNAME>";
 $password = "<YOUR_PASSWORD>";
 
-$m = new MongoDB\Client('mongodb://' . $username . ':' . $password . '@localhost:27017/<YOUR_DB_NAME>');
+$m = new MongoDB\Client('mongodb://' . $username . ':' . $password . '@localhost:27017/' . $password);
 $db = $m->$password; 
 $collection=$db->test;
 $result=$collection->find();
@@ -412,6 +504,11 @@ $port=@arr[1];
 system("sed -i -n '/" . $username . "'/!p Ports-students");
 system("sed -i -n '/" . $port . "'/!p .ports");
 system ("sort .ports");
+```
+
+- Cancellazione dell'username dal file ```/etc/cron.deny```:
+```perl
+system("sed -i -n '/" . $username . "'/!p /etc/cron.deny");
 ```
 
 - Cancellazione dell'utente e del personale database da MySQL:
