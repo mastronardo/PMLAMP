@@ -28,6 +28,9 @@ system("sed -i -n '/" . $username . "'/!p Ports-students"); # Cancella la riga c
 system("sed -i -n '/" . $port . "'/!p .ports"); # Cancella la riga con il numero di porta dal file .ports
 system ("sort .ports"); # Ordina il file .ports
 
+# Cancellazione dell'username dal file /etc/cron.deny
+system("sed -i -n '/" . $username . "'/!p /etc/cron.deny");
+
 # Cancellazione dell'utente e del personale database da MySQL
 $myConnection = DBI->connect("DBI:mysql:mysql:localhost", "root", "adminadmin");
 $query = $myConnection->prepare("DROP DATABASE " . $username);

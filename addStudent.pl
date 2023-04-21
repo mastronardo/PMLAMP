@@ -49,7 +49,9 @@ system ("sudo mkdir -p /home/Lavori/" . $username); # Creazione della cartella c
 system ("sudo chown " . $username  . ":administrator /home/Lavori/" . $username);
 system ("sudo chmod 770 /home/Lavori/" . $username);
 
-system ("sudo chmod 707 /home/" . $username); # L'amministratore può accedere a tutte le home degli studenti, mentre ogni studente solo alla sua
+# L'amministratore può accedere a tutte le home degli studenti, mentre ogni studente solo alla sua
+system ("sudo chown " . $username  . ":administrator /home/" . $username);
+system ("sudo chmod 770 /home/" . $username);
 $exp->soft_close(); # Chiude l'istanza di Expect
 
 print ("\nStudente aggiunto correttamente\n");
@@ -176,10 +178,13 @@ system ('sudo systemctl reload nginx');
 
 # Scrivo un file nella home dell'utente con le sue credenziali
 system ('sudo echo "Credenziali MySQL e MongoDb\Username:' . $usernamedb . '\Password: ' . $username . '\Numero di porta: ' . $port . '" > /home/' . $username . '/credentials.txt');
-system ('sudo chown ' . $username . ':' . $username . ' /home/' . $username  . '/credentials.txt');
-system ('sudo chmod 407 /home/' . $username . '/credentials.txt');
+system ('sudo chown ' . $username . ':administrator /home/' . $username  . '/credentials.txt');
+system ('sudo chmod 470 /home/' . $username . '/credentials.txt');
 
 # Modifica del bashrc in modo da poter avviare l'IDE soltanto digitando "eclipse" da terminale
 system ('sudo echo "alias eclipse=\'/home/Lavori/eclipse/eclipse\'" >> /home/' . $username . '/.bashrc');
+
+# Ogni studente verrà aggiunto al file cron.deny in modo da non poter utilizzare il servizio cron
+system ('sudo echo "' . $username'" >> /etc/cron.deny');
 
 print ("\nUtente creato correttamente\n");
