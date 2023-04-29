@@ -1,9 +1,9 @@
 # PMLAMP
-## P(Piccadaci) M(Mastronardo) L(Linux) A(A web server) M(Mysql/Mongodb) P(PHP)
-Progetto sviluppato su Debian GNU/Linux 11 (architettura x86) per la gestione di utenti, dove i soli servizi messi a loro disposizione sono:
-- un web server (Nginx) per la creazione di pagine web tramite Eclipse PHP IDE;
-- database sql e nosql;
-- connessione ai database tramite php;
+## P(Piccadaci) M(Mastronardo) L(Linux) A(A web server) M(Mysql/Mongodb) P(PHP/Perl)
+Progetto sviluppato su Debian GNU/Linux 11 (architettura x86) dove un _amministratore gestisce una classe di studenti_.
+Agli studenti è concessa la possibilità di:
+- creare pagine web in locale, tramite Eclipse PHP IDE;
+- accedere ai database sql e nosql.
 
 ---
 
@@ -65,12 +65,14 @@ Per controllare l'uid, il gid e i gruppi a cui appartiene un utente si può usar
 uid=1000(matteopiccadaci) gid=1000(matteopiccadaci) groups=1000(matteopiccadaci),1002(Studenti)
 ```
 
-L'amministratore può visualizzare la lista dei gruppi e degli utenti presenti nel sistema tramite lo script ```show_user_group.pl```:
-```perl
-system("cut -d ':' -f 1,3 /etc/group | sort -n > groups.txt");
-system("cut -d ':' -f 3,5 /etc/passwd | sort -n > userstemp.txt");
-system("sed 's/,,,//' userstemp.txt > users.txt");
-system("rm userstemp.txt");
+L'amministratore può visualizzare la lista dei gruppi e degli utenti (non di sistema) tramite lo script ```group.sh```:
+```bash
+sudo chmod 770 /home/administrator/group.sh # do i permessi di esecuzione per lo script
+```
+
+```bash
+sudo getent passwd {1000..65533} | cut -f 3,5 -d : | sed 's/,,,//' > users.txt
+sudo getent group {1000..65533} | cut -f 1,3 -d : > groups.txt
 ```
 
 # Backup della cartella condivisa
@@ -98,12 +100,12 @@ Il backup viene effettuato in formato ```.tar.gz``` e viene salvato nella cartel
 
 ## Cron
 Per eseguire il backup seguendo una routine periodica è necessario utilizzare il servizio basato sul tempo chiamato **Cron**, implementato attraverso l’uso del demone ```crond```. Il demone ha il compito di svegliarsi ogni minuto ed eseguire ogni programma che è stato programmato per quel momento.
-Il file di configurazione principale di crond è ```/etc/crontab``` che contiene l’elenco delle operazioni periodiche generali da eseguire nel sistema. Il primo file controllato da crond per decidere se c’e da eseguire una operazione è questo.
-Le operazioni periodiche sono denominate ```cronjob``` e vengono registrate e gestite tramite:
-- file presenti nella directory ```/etc/cron.d/```;
-- aggiungendo al file ```/etc/crontab``` una nuova espressione cron.
+Il file di configurazione principale di crond è ```/etc/crontab``` che contiene l’elenco delle operazioni periodiche generali da eseguire nel sistema (denominate ```cronjob```).
+Successivamente vengono ispezionati file di due directory:
+- ```/etc/cron.d/```;
+- ```/var/spool/cron/crontabs``` contenente i crontab personali degli utenti.
 
-Il servizio cron è in grado di eseguire anche operazioni richieste da un singolo utente; in questo caso questi dovrà creare un suo crontab personale invocando il comando:
+Come appena accennato, il servizio cron è in grado di eseguire anche operazioni richieste da un singolo utente; in questo caso questi dovrà creare un suo crontab personale invocando il comando:
 ```bash
 sudo crontab -e
 ```
@@ -112,10 +114,14 @@ Si può mostrare a schermo la lista delle operazioni programmate usando il coman
 ```bash
 crontab -l
 ```
+Per verificare che il servizio sia attivo si lancia il comando:
+```bash
+systemctl status cron
+```
 
 La sintassi per le espressioni cron si può suddividere in due elementi: **la pianificazione** e **il comando da eseguire**.
 
-- La componente di pianificazione della sintassi è suddivisa in 5 diversi campi, che vengono scritti nel seguente ordine:
+La componente di pianificazione della sintassi è suddivisa in 5 diversi campi, che vengono scritti nel seguente ordine:
 
 |     Field        | Allowed Values  |
 |:----------------:|:---------------:|
@@ -127,16 +133,55 @@ La sintassi per le espressioni cron si può suddividere in due elementi: **la pi
 
 Nelle espressioni cron, un asterisco è una variabile che rappresenta tutti i valori possibili. Pertanto, un'attività pianificata con * * * * * oppure */1 * * * * ... verrà eseguita ogni minuto di ogni ora di ogni giorno di ogni mese.
 
-- Il cronjob pianificato per questo progetto è il seguente:
-```bash
-0 8 5 3,6,9,12 * /usr/bin/perl /home/administrator/Studentsbackup.pl >/dev/null 2>&1
-```
-Il backup viene effettuato alle ore 08:00 del quinto giorno dei mesi di Marzo, Giugno, Settembre e Dicembre, e ciò permette di non saturare la memoria del server.
+## Anacron
+Anacron è utile per eseguire comandi periodici, con una frequenza definita in giorni, su computer desktop o laptop che non sono sempre accesi.
+Anacron garantisce che il comando verrà eseguito al prossimo boot del computer.
 
-Ricordati che per eseguire lo script con cron è necessario dare i permessi di esecuzione:
+- Gli **anacron job** sono elencati nel file ```/etc/anacrontab``` e possono essere programmati usando il seguendo formato:
+```bash
+period   delay   job-identifier   command
+```
+- **period**: questa è la frequenza dell'esecuzione del job specificata in giorni;
+- **delay**: è il numero di minuti di attesa prima di eseguire un job;
+- **job-id**: è il nome univoco per il job;
+- **command**: è il comando o lo script da eseguire (_per eseguire script diversi da quelli .sh c'è la necessita di specificare anche il path del compilatore_).
+
+Anacron verificherà se un _job_ è stato eseguito entro il periodo specificato nel campo del _period_. In caso contrario, esegue il comando specificato nel campo _command_ dopo aver atteso il numero di minuti specificato nel campo _delay_.
+Una volta che il job è stato eseguito, nella directory ```/var/spool/anacron``` viene creato un file con il nome del job-id contenente il timestamp dell'ultima esecuzione.
+
+Se la macchina è accesa anacron esegue il job nella fascia oraria specificata dalla variabile di ambiente ```START_HOURS_RANGE``` presente nel file ```/etc/anacrontab```.
+
+- L'anacron job pianificato per questo progetto è il seguente:
+```bash
+START_HOURS_RANGE=7-9
+
+90   10    backup   /usr/bin/perl /home/administrator/Studentsbackup.pl
+```
+Il backup viene effettuato ogni ```90 giorni``` tra le ```ore 07:00 e le 09:00``` se la macchina è **accesa**.
+Altrimenti viene effettuato all'avvio successivo della macchina.
+
+Per permettere l'esecuzione dello script ad anacron è necessario dare i permessi di esecuzione:
 ```bash
 sudo chmod 770 /home/administrator/Studentsbackup.pl
 ```
+
+Per verificare che il servizio sia attivo si lancia il comando:
+```bash
+systemctl status anacron
+```
+
+Per monitorare i log di anacron basta controllare il file di log di sistema ```/var/log/syslog``` lanciando il comando:
+```bash
+sudo grep anacron /var/log/syslog
+```
+
+|                   Cron                                    |     Anacron     |
+|:---------------------------------------------------------:|:---------------:|
+| È un demone                                               | È un servizio            |
+| Ideale per i server                                       | Ideale per desktop e laptop            |
+| Consente di eseguire job pianificati ogni minuto          | Consente di eseguire job pianificati su base giornaliera |
+| Non esegue un job pianificato quando la macchina è spenta | Se la macchina è spenta, eseguirà un job pianificato quando la macchina verrà accesa la volta successiva |
+| Può essere utilizzato sia da utenti normali che da root   | Può essere utilizzato solo da root |
 
 ### Blocco del Cron agli utenti
 L’amministratore può bloccare l’uso del servizio cron agli studenti con la creazione del file ```/etc/cron.deny``` che dovrà contenere la lista degli username di coloro che non possono usarlo. L'username viene scritto sul file tramite lo script ```addStudent.pl```.
@@ -252,6 +297,11 @@ mysql> SHOW GRANTS FOR 'mpiccadaci'@'localhost';
 +----------------------------------------------+
 ```
 
+Per verificare che il servizio sia attivo si lancia il comando:
+```bash
+systemctl status mysql
+```
+
 ## MongoDb
 Il più popolare tra i database NoSql e document-oriented è MongoDb, che utilizza una struttura dati di tipo BSON (Binary JSON), che lo rende molto flessibile. Le caratteristiche principali dell'applicazione sono la facilità delle Query, l'indicizzazione e la possibilità di effettuare sharding e replica, in maniera tale da lasciare all'amministratore la decisione riguardo il trade-off fra velocità e affidabilità dei dati.
 
@@ -318,6 +368,11 @@ system ('sudo systemctl restart mongod');
   <br>
   <img src="docs/mongo-user.jpg">
 </p>
+
+Per verificare che il servizio sia attivo si lancia il comando:
+```bash
+systemctl status mongod
+```
 
 ---
 
@@ -388,6 +443,11 @@ Puoi testare se la configurazione ha errori di sintassi digitando:
 sudo nginx -t
 ```
 
+Per verificare che il servizio sia attivo si lancia il comando:
+```bash
+systemctl status nginx
+```
+
 <p align="center">
   <img src="docs/workspace.png">
 </p>
@@ -406,7 +466,7 @@ andrearicciardi 3002
 antoninomastronardo 3003
 ```
 
-Per semplificare la user experience aggiunto al file ```bashrc``` l'alias eclipse, in modo da poter avviare l'IDE semplicemente digitando "eclipse" da terminale:
+Per semplificare la user experience viene aggiunto al file ```bashrc``` l'alias eclipse, in modo da poter avviare l'IDE semplicemente digitando "eclipse" da terminale:
 ```perl
 system ('sudo echo "alias eclipse=\'/home/Lavori/eclipse/eclipse\'" >> /home/' . $username . '/.bashrc');
 ```
@@ -471,6 +531,33 @@ foreach ($result as $document) {
 
 echo "Connesso a MongoDb!\n";
 ```
+
+# Disabilitazione dell'utenza
+L'amministratore può disabilitare il login di un utente tramite lo script ```disableuser.pl```.
+```perl
+print ("Inserisci il nome dello studente: ");
+$nome=<>;
+chomp($nome);
+print ("Inserisci il cognome dello studente: ");
+$cognome=<>;
+chomp($cognome);
+$username=lc($nome) . lc($cognome);
+
+system("sudo chage -E0 " . $username);
+```
+
+In un secondo momento è possibile riabilitare il login di un utente tramite lo script ```enableuser.pl```.
+```perl
+# Medesima sezione di codice vista sopra ...
+system("sudo chage -E -1 " . $username);
+```
+
+Tramite il comando ```chage``` è possibile modificare la data di scadenza della password o dell'account dell'utente.
+- Nel primo caso viene impostata a 0, quindi l'utente non potrà più accedere al sistema.
+- Nel secondo viene impostata a 1, quindi l'utente potrà nuovamente riaccedere al sistema.
+
+Per controllare se le modifiche sono state effettuate correttamente si può utilizzare il comando ```sudo cat /etc/shadow``` controllando l'8° campo.
+Per controllare la data di scadenza dell'utenza si può utilizzare il comando ```chage -l <username>```.
 
 # Cancellazione dell'utenza
 L'amministratore può cancellare un utente tramite lo script ```deluser.pl```.
