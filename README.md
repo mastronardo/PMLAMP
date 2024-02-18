@@ -3,7 +3,7 @@
 Progetto sviluppato su Debian GNU/Linux 11 (architettura x86) dove un _amministratore gestisce una classe di studenti_.
 Agli studenti è concessa la possibilità di:
 - creare pagine web in locale, tramite Eclipse PHP IDE;
-- accedere ai database sql e nosql.
+- accedere ai database SQL e NoSQL.
 
 ---
 
